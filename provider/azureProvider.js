@@ -15,6 +15,7 @@ const config = require('../config');
 const pkg = require('../package.json');
 
 let resourceGroupName;
+let preserveResourceGroup;
 let deploymentName;
 let functionAppName;
 let subscriptionId;
@@ -42,8 +43,9 @@ class AzureProvider {
 
     return new BbPromise((resolve) => {
       functionAppName = this.serverless.service.service;
-      resourceGroupName = `${functionAppName}-rg`;
-      deploymentName = `${resourceGroupName}-deployment`;
+      resourceGroupName = this.serverless.service.provider.resourceGroup || `${functionAppName}-rg`;
+      deploymentName = this.serverless.service.provider.deploymentName || `${resourceGroupName}-deployment`;
+      preserveResourceGroup = this.serverless.service.provider.preserveResourceGroup || false;
 
       resolve();
     });
@@ -182,20 +184,25 @@ class AzureProvider {
     });
   }
 
+  // Modification to leave resource group if preserve keyword found in yaml
   DeleteResourceGroup () {
-    this.serverless.cli.log(`Deleting resource group: ${resourceGroupName}`);
-    const resourceClient = new resourceManagement.ResourceManagementClient(principalCredentials, subscriptionId);
-    resourceClient.addUserAgentInfo(`${pkg.name}/${pkg.version}`);
+    if (this.serverless.service.provider.preserveResourceGroup == false) {
+      this.serverless.cli.log(`Deleting resource group: ${resourceGroupName}`);
+      const resourceClient = new resourceManagement.ResourceManagementClient(principalCredentials, subscriptionId);
+      resourceClient.addUserAgentInfo(`${pkg.name}/${pkg.version}`);
 
-    return new BbPromise((resolve, reject) => {
-      resourceClient.resourceGroups.deleteMethod(resourceGroupName, (error, result) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result);
-        }
+      return new BbPromise((resolve, reject) => {
+        resourceClient.resourceGroups.deleteMethod(resourceGroupName, (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        });
       });
-    });
+    } else {
+      this.serverless.cli.log(`Preserving resource group: ${resourceGroupName}`);
+    }
   }
 
   getAdminKey () {
